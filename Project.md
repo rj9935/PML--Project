@@ -299,20 +299,13 @@ The text above describes the rationales for various design choices made, includi
 * Selecting the ML algorithm for use with the blind test cases  
 * Computing the likely performance against the blind test cases and justifying the decision to proceed.
 
-But the ultimate rationale for these choices is the actual performance achieved in the grading of the $20$ blind test cases. The following code chunk was used to predict the (a-priori unknown) $classe results for each of the $20$ test cases, print them out and finally prepare the correctly formatted files for submission.
+But the ultimate rationale for these choices is the actual performance achieved in the grading of the $20$ blind test cases. The following code chunk was used to predict the (a-priori unknown) $classe results for each of the $20$ test cases and prepare the correctly formatted files for submission.
 
 ```r
 ## Use selected model to predict submission results
 submission 			<- predict(model_rf, submissionCases)
-submission
-```
+## submission
 
-```
-##  [1] B A B A A E D B A A B C B A E E A B B B
-## Levels: A B C D E
-```
-
-```r
 ## Supplied function for creating results files
 pml_write_files 	<- function(x){
   n 				<- length(x)
