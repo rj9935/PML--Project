@@ -4,7 +4,7 @@ Ray Jones
 
 
 ### Executive Summary
-This document has been prepared as a submission in response to the Project requirements for the Practical Machine Learning (PML) module of the Coursera/Johns Hopkins Data Science Specialization. The aim of the project was to train a machine learning (ML) algorithm to analyse a data set consisting of quantified self movement measurements collected from accelerometers worn by a number of people during exercises. After initialization and pre-processing of the data, a number of different ML algorithms were trained and their in-sample performances assessed. On this basis, the best ML algorithm was selected and subjected to out-of-sample performance assessment. The selected ML algorithm was then used to generate a prediction of how well the exercises were performed for $20$ blind test cases. This prediction was submitted for grading and a $100 \%$ accuracy level was achieved using the randomForest ML algorithm.
+This document has been prepared as a submission in response to the Project requirements for the Practical Machine Learning (PML) module of the Coursera/Johns Hopkins Data Science Specialization. The aim of the project was to train a machine learning (ML) algorithm to analyse a data set consisting of quantified self movement measurements collected from accelerometers worn by a number of people during exercises. After initialization and pre-processing of the data, a number of different ML algorithms were trained and their in-sample performances assessed. On this basis, the best ML algorithm was selected and subjected to out-of-sample performance assessment. The selected ML algorithm was then used to generate a prediction of how well the exercises were performed for $20$ blind test cases. This prediction was submitted for grading and a $100\%$ accuracy level was achieved using the randomForest ML algorithm.
 
 ### Exploratory Analysis & Data Pre-processing
 The data sets for this project are available from https://d396qusza40orc.cloudfront.net/predmachlearn/ - they consist of pml-training.csv which includes the training/testing data and pml-testing.csv which includes the 20 blind test cases for the project submission. Full instructions on this project are available at https://class.coursera.org/predmachlearn-034/human_grading/view/courses/975204/assessments/4/submissions - the collection and original analysis of this data set are described in a paper[^1] available online from http://groupware.les.inf.puc-rio.br/har .
@@ -15,7 +15,7 @@ The code chunk below loads the various required libraries and then sets the rand
 
 
 ```r
-## Install the required libraries
+## Install the required libraries for the analysis
 library(caret, quietly=T);library(parallel, quietly=T);library(doParallel, quietly=T);library(knitr, quietly=T)
 library(caTools, quietly=T);library(rpart, quietly=T);library(ipred, quietly=T);library(plyr, quietly=T)
 library(survival, quietly=T);library(splines, quietly=T);library(MASS, quietly=T); library(kernlab, quietly=T)
@@ -47,7 +47,7 @@ kable(output)
 Submission Cases                   20         160
 Training/testing Data           19622         160
 
-The next step was to remove the first seven variables from each data set, as they contain values added to the raw measurement data during the original analysis which were not relevant to the analysis here. Following this, variables with incomplete (missing) measurements were identified and removed (as these were also added during the original analysis, missing samples generally being a consequence of the time windowing imposed during that analysis). In order to reduce the computational load involved in ML algorithm training, pairs of strongly correlated variables were next identified using the findCorrelations() function and one of each pair was removed from the data set (since one of each pair was redundant as a predictor due to the correlation). The dimensions of the resulting data sets were then printed. 
+The next step was to remove the first seven variables from each data set, as they contain values added to the raw measurement data during the original analysis which were not relevant to the analysis here. Following this, variables with incomplete (missing) measurements were identified and removed (as these were also added during the original analysis, missing samples generally being a consequence of the time windowing imposed during that analysis). The final step carried out on the combined training/tesing data was to partition it into training and testing sets on the basis of an 80%:20% random selection.
 
 
 ```r
@@ -57,48 +57,8 @@ submissionCases 	<- submissionCases[,-c(1:7)]
 dataSet 			<- dataSet[,colSums(is.na(dataSet)) == 0]
 submissionCases 	<- submissionCases[,colSums(is.na(submissionCases)) == 0]
 
-## Find strongly correlated variables & remove from data sets
-correlations 		<- findCorrelation(cor(dataSet[,1:52]), cutoff=0.8)
-dataSet 			<- dataSet[,-c(correlations)]
-submissionCases 	<- submissionCases[,-c(correlations)]
-output 				<- rbind(dim(submissionCases), dim(dataSet))
-colnames(output) 	<- c("Observations", "Variables")
-rownames(output) 	<- c("Submission Cases", "Training/testing Data")
-kable(output)
-```
-
-                         Observations   Variables
-----------------------  -------------  ----------
-Submission Cases                   20          40
-Training/testing Data           19622          40
-
-As a final check before data partitioning, an assessment was carried out to establish that no zero or near zero variance predictors were present in the final filtered data sets (since predictors that don't change value over the data set are not likely to be useful as predictors) - this was confirmed. 
-
-
-```r
-## Confirm absence of zero & near zero variance terms
-dataSet_nzv 		<- nearZeroVar(dataSet, saveMetrics = TRUE)
-submissionCases_nzv <- nearZeroVar(submissionCases, saveMetrics = TRUE)
-output 				<- rbind(cbind(sum(as.numeric(submissionCases_nzv$zeroVar)), 
-						  		   sum(as.numeric(submissionCases_nzv$nzv))), 
-							 cbind(sum(as.numeric(dataSet_nzv$zeroVar)), 
-							 	   sum(as.numeric(dataSet_nzv$nzv))))
-colnames(output) 	<- c("Zero Variance", "Near Zero Variance")
-rownames(output) 	<- c("Submission Cases", "Training/testing Data")
-kable(output)
-```
-
-                         Zero Variance   Near Zero Variance
-----------------------  --------------  -------------------
-Submission Cases                     0                    0
-Training/testing Data                0                    0
-
-Finally, the code chunk below was used to randomly partition dataSet in to training ($60 \%$) and testing ($40 \%$) sub-sets (to allow training, in-sample and out-of-sample testing) and then print the dimensions of each. 
-
-
-```r
-## Partition the dataSet into 60% training and 40% test data sets
-intrain 			<- createDataPartition(dataSet$classe, p = 0.60, list = FALSE)
+## Partition the dataSet into 80% training and 20% test data sets
+intrain 			<- createDataPartition(dataSet$classe, p = 0.80, list = FALSE)
 training 			<- dataSet[intrain,]
 testing 			<- dataSet[-intrain,]
 output 				<- rbind(dim(testing), dim(training))
@@ -109,8 +69,55 @@ kable(output)
 
                  Observations   Variables
 --------------  -------------  ----------
-Testing data             7846          40
-Training data           11776          40
+Testing data             3923          53
+Training data           15699          53
+
+Next, in order to reduce the computational load involved in ML algorithm training, pairs of strongly correlated variables were identified using the findCorrelations() function in the training data set only and one of each pair was removed from each of the training, testing and submission case data sets (since one of each pair was redundant as a predictor due to the correlation). This was done on the basis of correlations identified in the training data only in order to preserve the Out-Of-Sample (OOS) nature of the testing set. The dimensions of the resulting data sets were then printed. 
+
+
+```r
+## Find strongly correlated variables & remove from data sets
+correlations 		<- findCorrelation(cor(training[,1:52]), cutoff=0.8)
+training 			<- training[,-c(correlations)]
+testing 			<- testing[,-c(correlations)]
+submissionCases 	<- submissionCases[,-c(correlations)]
+output 				<- rbind(dim(submissionCases), dim(testing), dim(training))
+colnames(output) 	<- c("Observations", "Variables")
+rownames(output) 	<- c("Submission Cases", "Testing Data", "Training Data")
+kable(output)
+```
+
+                    Observations   Variables
+-----------------  -------------  ----------
+Submission Cases              20          40
+Testing Data                3923          40
+Training Data              15699          40
+
+As a final check, an assessment was carried out to establish that no zero or near zero variance predictors were present in the final filtered data sets (since predictors that don't change value over the data set are not likely to be useful as predictors) - this was confirmed. 
+
+
+```r
+## Confirm absence of zero & near zero variance terms
+training_nzv 		<- nearZeroVar(training, saveMetrics = TRUE)
+testing_nzv 		<- nearZeroVar(testing, saveMetrics = TRUE)
+submissionCases_nzv <- nearZeroVar(submissionCases, saveMetrics = TRUE)
+output 				<- rbind(cbind(sum(as.numeric(submissionCases_nzv$zeroVar)), 
+						  		   sum(as.numeric(submissionCases_nzv$nzv))), 
+							 cbind(sum(as.numeric(testing_nzv$zeroVar)), 
+							 	   sum(as.numeric(testing_nzv$nzv))),
+							 cbind(sum(as.numeric(training_nzv$zeroVar)), 
+							 	   sum(as.numeric(training_nzv$nzv))))
+
+colnames(output) 	<- c("Zero Variance", "Near Zero Variance")
+rownames(output) 	<- c("Submission Cases", "Testing Data", "Training Data")
+kable(output)
+```
+
+                    Zero Variance   Near Zero Variance
+-----------------  --------------  -------------------
+Submission Cases                0                    0
+Testing Data                    0                    0
+Training Data                   0                    0
 
 As can be seen above, after pre-processing the data sets consist of $40$ variables. In the training & testing sets this includes the $classe variable which contains the truth for the quality of exercise performance. In submissionCase the $classe variable is absent, replaced by a test id no. (ie for the submissionCases the actual truth data is unknown a-priori and hence these test cases are blind).  
 
@@ -140,7 +147,7 @@ For further discussion of the details of any of these ML algorithms the reader i
 
 
 ```r
-## Set up parallel processing
+## Set up parallel processing in order to speed optimize
 cluster 			<- makeCluster(detectCores() - 1)
 registerDoParallel(cluster)
 
@@ -180,16 +187,16 @@ kable(output)
 
               Accuracy     Kappa   AccuracyLower   AccuracyUpper
 -----------  ---------  --------  --------------  --------------
-rf             1.00000   1.00000         0.99969         1.00000
-rpart          0.49983   0.34680         0.49076         0.50890
-treebag        0.99958   0.99946         0.99901         0.99986
-gbm            0.96663   0.95778         0.96322         0.96980
-lda            0.64368   0.54961         0.63496         0.65234
-svmLinear      0.71077   0.63195         0.70248         0.71895
-svmRadial      0.92238   0.90160         0.91740         0.92715
-LogitBoost     0.89332   0.86356         0.88711         0.89929
+rf             1.00000   1.00000         0.99977         1.00000
+rpart          0.47493   0.31309         0.46710         0.48278
+treebag        0.99987   0.99984         0.99954         0.99998
+gbm            0.96509   0.95584         0.96210         0.96791
+lda            0.64679   0.55365         0.63926         0.65427
+svmLinear      0.70960   0.63034         0.70243         0.71669
+svmRadial      0.93324   0.91539         0.92923         0.93710
+LogitBoost     0.89609   0.86660         0.89078         0.90123
 
-From the results presented in the table above, it is clear that the random forest (rf) and bagged trees (treebag) algorithms gave the best results with in-sample accuracies at or near $100 \%$ (ie $0 \%$ in-sample error rate). The boosted trees (gbm) and support vector machines - radial (svmr) algorithms both gave in-sample accuracies in excess of $90 \%$ while all others fell in the range $50 - 90 \%$. Since the highest accuracy was achieved by the random forest algorithm (the same algorithm used in the original research paper), this method was selected for further testing at this point.
+From the results presented in the table above, it is clear that the random forest (rf) and bagged trees (treebag) algorithms gave the best results with in-sample accuracies at or near $100\%$ (ie $0\%$ in-sample error rate). The boosted trees (gbm) and support vector machines - radial (svmr) algorithms both gave in-sample accuracies in excess of $90\%$ while all others fell in the range $\approx 45 - 90\%$. Since the highest accuracy was achieved by the random forest algorithm (the same algorithm used in the original research paper), this method was selected for further testing at this point.
 
 Initially the detailed in-sample test results for the random forest algorithm were printed out by the following code chunk using the {caret}confusionMatrix() routine. Then the trained random forest model was used to predict the $classe results for the testing sub-set of the partitioned data and details of the out-of-sample performance (cross-validation) were printed.  Finally a bar chart graphic comparing the in-sample and out-of-sample performances was prepared to allow easy comparison of the results.
 
@@ -206,16 +213,16 @@ cm_training
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 3348    0    0    0    0
-##          B    0 2279    0    0    0
-##          C    0    0 2054    0    0
-##          D    0    0    0 1930    0
-##          E    0    0    0    0 2165
+##          A 4464    0    0    0    0
+##          B    0 3038    0    0    0
+##          C    0    0 2738    0    0
+##          D    0    0    0 2573    0
+##          E    0    0    0    0 2886
 ## 
 ## Overall Statistics
 ##                                      
 ##                Accuracy : 1          
-##                  95% CI : (0.9997, 1)
+##                  95% CI : (0.9998, 1)
 ##     No Information Rate : 0.2843     
 ##     P-Value [Acc > NIR] : < 2.2e-16  
 ##                                      
@@ -247,33 +254,33 @@ cm_testing
 ## 
 ##           Reference
 ## Prediction    A    B    C    D    E
-##          A 2230    9    0    0    0
-##          B    2 1503   14    0    0
-##          C    0    4 1350   18    1
-##          D    0    0    4 1268    4
-##          E    0    2    0    0 1437
+##          A 1115    4    0    0    0
+##          B    1  753    4    0    0
+##          C    0    2  680    3    0
+##          D    0    0    0  639    3
+##          E    0    0    0    1  718
 ## 
 ## Overall Statistics
 ##                                           
-##                Accuracy : 0.9926          
-##                  95% CI : (0.9905, 0.9944)
+##                Accuracy : 0.9954          
+##                  95% CI : (0.9928, 0.9973)
 ##     No Information Rate : 0.2845          
 ##     P-Value [Acc > NIR] : < 2.2e-16       
 ##                                           
-##                   Kappa : 0.9906          
+##                   Kappa : 0.9942          
 ##  Mcnemar's Test P-Value : NA              
 ## 
 ## Statistics by Class:
 ## 
 ##                      Class: A Class: B Class: C Class: D Class: E
-## Sensitivity            0.9991   0.9901   0.9868   0.9860   0.9965
-## Specificity            0.9984   0.9975   0.9964   0.9988   0.9997
-## Pos Pred Value         0.9960   0.9895   0.9832   0.9937   0.9986
-## Neg Pred Value         0.9996   0.9976   0.9972   0.9973   0.9992
+## Sensitivity            0.9991   0.9921   0.9942   0.9938   0.9958
+## Specificity            0.9986   0.9984   0.9985   0.9991   0.9997
+## Pos Pred Value         0.9964   0.9934   0.9927   0.9953   0.9986
+## Neg Pred Value         0.9996   0.9981   0.9988   0.9988   0.9991
 ## Prevalence             0.2845   0.1935   0.1744   0.1639   0.1838
-## Detection Rate         0.2842   0.1916   0.1721   0.1616   0.1832
-## Detection Prevalence   0.2854   0.1936   0.1750   0.1626   0.1834
-## Balanced Accuracy      0.9988   0.9938   0.9916   0.9924   0.9981
+## Detection Rate         0.2842   0.1919   0.1733   0.1629   0.1830
+## Detection Prevalence   0.2852   0.1932   0.1746   0.1637   0.1833
+## Balanced Accuracy      0.9988   0.9953   0.9963   0.9964   0.9978
 ```
 
 ```r
@@ -287,7 +294,7 @@ plot(cm_testing$table, col = cm_testing$byClass, main = paste("RF Model Out-Of-S
 
 <img src="Project_files/figure-html/validation-1.png" title="" alt="" style="display: block; margin: auto;" /><p class="caption">*Figure 1: Selected RF Model Performance*</p>
 
-The detailed in-sample results for the random forest method show the very high accuracy performance achieved - $100 \%$. As expected, this performance was lower for the out-of-sample (manual cross-validation) testing but nevertheless exceeded $99.2 \%$ accuracy (or $< 0.8 \%$ out-of-sample error rate). At this accuracy level, the probability of achieving a perfect score for the $20$ blind test cases was computed as $0.9926^{20} \approx 0.8620$. But given that $2$ attempts were allowed, the probability that at least one of those attempts would achieve a perfect score was computed as $1-(1-0.8672)^{2} \approx 0.9809$, ie a $98.1 \%$ probability of achieving at least one perfect score in the two attempts allowed. On this basis, the decision was taken to proceed with the blind test case submission. Examining Figure 1 shows these very high levels of prediction accuracy graphically. On the the LHS the bar chart shows the perfect results achieved in-sample (hence the bars are shown filled in) compared to the RHS where the out-of-sample results do show the small (but acceptable) number of errors.
+The detailed in-sample results for the random forest method show the very high accuracy performance achieved - $100\%$. As expected, this performance was lower for the out-of-sample (manual cross-validation) testing but nevertheless exceeded $99.5 \%$ accuracy (or $< 0.5\%$ out-of-sample error rate). At this accuracy level, the probability of achieving a perfect score for the $20$ blind test cases was computed as $0.9926^{20} \approx 91.2\%$. But given that $2$ attempts were allowed, the probability that at least one of those attempts would achieve a perfect score was computed as $1-(1-0.912)^{2} \approx 99.2\%$, ie a $99.2\%$ probability of achieving at least one perfect score in the two attempts allowed. On this basis, the decision was taken to proceed with the blind test case submission. Examining Figure 1 shows these very high levels of prediction accuracy graphically. On the the LHS the bar chart shows the perfect results achieved in-sample (hence the bars are shown filled in) compared to the RHS where the out-of-sample results do show the small (but acceptable) number of errors.
 
 ### Rationale For Design Choices & Submission
 The text above describes the rationales for various design choices made, including:  
